@@ -36,12 +36,16 @@ import java.util.List;
 import java.util.Random;
 import android.os.Handler;
 
+import static android.view.View.INVISIBLE;
+import static android.view.View.VISIBLE;
+
 public class MainActivity extends AppCompatActivity implements AsyncResponse {
 
     private EditText mSerialNumberEdit;
     private TextView mCupIdText;
     private TextView mDeviceInfoText;
     private ImageView mCupImage;
+    private ImageView mLeaveMeImage;
     private ProgressDialog mProgressDialog;
 
     private int mContrast = ImageProperties.DEFAULT_CONTRACT;
@@ -54,7 +58,6 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
     private Bitmap finalImage;
 
     private SharedPreferences settings;
-    private SharedPreferences.Editor editor;
 
     private Handler handler = new Handler();
 
@@ -62,13 +65,14 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        //loadingPanel(true);
         settings = getSharedPreferences(PREFS_NAME,0);
         mCupId = settings.getString("cupId", "");
         setContentView(R.layout.activity_main);
 
         quoteList = new ArrayList<>();
-        // Start timed pictures after 60s
-        handler.postDelayed(runnable, 60000);
+        // Start timed pictures after x seconds
+        handler.postDelayed(runnable, 55000);
 
         ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
 
@@ -112,30 +116,41 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
 
         Launch();
 
+
         mSerialNumberEdit = (EditText) findViewById(R.id.serailNumberText);
         mCupIdText = (TextView) findViewById(R.id.cupIdText);
         mCupIdText.setText(mCupId);
         mDeviceInfoText = (TextView) findViewById(R.id.deviceInfoText);
+        mLeaveMeImage = (ImageView) findViewById(R.id.leavemeimage);
         mCupImage = (ImageView) findViewById(R.id.imageSrc);
+
+        Bitmap leaveMeBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.leaveme);
+        mLeaveMeImage.setImageBitmap(leaveMeBitmap);
+
+        Bitmap trumpBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.trump);
+        mCupImage.setImageBitmap(trumpBitmap);
+
+        loadingPanel(true);
+
     }
 
     private Runnable runnable = new Runnable() {
         @Override
         public void run() {
             timedLaunch();
-            handler.postDelayed(this, 55000);
+            handler.postDelayed(this, 45000);
         }
     };
 
     private void Launch() {
-        Toast.makeText(MainActivity.this, "Loading image..", Toast.LENGTH_LONG).show();
+        loadingPanel(true);
         AsyncJsonFetcher asyncJsonFetcher = new AsyncJsonFetcher(MainActivity.this);
         asyncJsonFetcher.delegate = MainActivity.this;
         asyncJsonFetcher.execute("https://api.whatdoestrumpthink.com/api/v1/quotes");
     }
 
     private void timedLaunch(){
-        Toast.makeText(MainActivity.this, "Loading timed image..", Toast.LENGTH_SHORT).show();
+        loadingPanel(true);
         quoteOfTheMoment = getRandomText();
         finalImage = createImage();
         setupImage();
@@ -147,7 +162,6 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
             @Override
             protected Bitmap doInBackground(Void... voids) {
                 Log.d("setupImage", "Asynctask started");
-               // Bitmap result = Bitmap.createBitmap(finalImage);
                 ImageUtils.convertImageToCupImage(finalImage, mContrast);
                 return finalImage;
             }
@@ -156,6 +170,9 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
             protected void onPostExecute(Bitmap bitmap) {
                 mCupImage.setImageBitmap(bitmap);
                 hideProgress();
+                mMukiCupApi.sendImage(finalImage, new ImageProperties(mContrast), mCupId);
+                mLeaveMeImage.setVisibility(INVISIBLE);
+                loadingPanel(false);
             }
         }.execute();
     }
@@ -163,7 +180,7 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
 
 
     public void send(View view) {
-        showProgress();
+        loadingPanel(true);
         mMukiCupApi.sendImage(finalImage, new ImageProperties(mContrast), mCupId);
     }
 
@@ -224,7 +241,6 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
         quoteOfTheMoment = getRandomText();
         finalImage = createImage();
         setupImage();
-        mMukiCupApi.sendImage(finalImage, new ImageProperties(mContrast), mCupId);
     }
 
     private String getRandomText() {
@@ -267,10 +283,6 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
             canvas.drawText(quote1, 200, 280, paint);
             canvas.drawText(quote2, 200, 365, paint);
 
-           // String first = quote.substring(0, quote.length() / 2);
-          //  String second = quote.substring(quote.length() / 2);
-         //   canvas.drawText(first, 200, 280, paint);
-          //  canvas.drawText(second, 200, 365, paint);
         } else {
             canvas.drawText(quote, 100, 280, paint);
         }
@@ -302,13 +314,21 @@ public class MainActivity extends AppCompatActivity implements AsyncResponse {
         return (res == PackageManager.PERMISSION_GRANTED);
     }
 
+    private void loadingPanel(Boolean panel) {
+        if (panel) {
+            findViewById(R.id.loadingPanel).setVisibility(VISIBLE);
+        } else {
+            findViewById(R.id.loadingPanel).setVisibility(INVISIBLE);
+        }
+    }
+
     @Override
     protected void onStop() {
         super.onStop();
         settings = getSharedPreferences(PREFS_NAME, 0);
-        editor = settings.edit();
+        SharedPreferences.Editor editor = settings.edit();
         editor.putString("cupId", mCupId);
-        editor.commit();
+        editor.apply();
     }
 
 }
